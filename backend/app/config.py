@@ -11,3 +11,4 @@ class Config:
         "postgresql://postgres:postgres@localhost:5432/campaign_assistant",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
