@@ -1,7 +1,8 @@
-Full-Stack Assignment — Pathik AI
-React + Python (Flask / FastAPI) + PostgreSQL + Google Ads API
+# Full-Stack Assignment — Pathik AI
+### React + Python (Flask / FastAPI) + PostgreSQL + Google Ads API
 
-Objective
+## Objective
+
 Build a small full-stack application that allows a user to:
 1. Create a marketing campaign (stored locally in PostgreSQL)
 2. Publish the campaign to a real Google Ads account using the Google Ads API
@@ -11,7 +12,7 @@ Note: You should be creating Inactive campaigns(Or control by startdate)
 4. Preferably creating a Search Campaign completing a basic campaign creation is
 acceptable.
 
-This assignment tests:
+## This assignment tests:
 ● API design
 ● React frontend
 ● Flask backend
@@ -19,15 +20,13 @@ This assignment tests:
 ● Google Ads API usage
 ● Code quality & documentation
 
-1. Backend — Python Flask (If using
-FastAPI then consider equivalent)
+1. Backend — Python Flask (If using FastAPI then consider equivalent)
 Tech Requirements
 ● Python 3.x
 ● Flask
 ● PostgreSQL
 ● SQLAlchemy (preferred)
-● Google Ads API using GoogleAdsClient (This is the official library for Google Ads
-API requests.)
+● Google Ads API using GoogleAdsClient (This is the official library for Google Ads API requests.)
 Google Ads Requirements
 You will need to configure:
 ● Developer token
@@ -53,26 +52,22 @@ The API should:
 Important:
 You can design the database schema yourself. The provided example is only for reference.
 Example (not mandatory):
-field type
-id UUID
-name text
-objective text
-campaign_type text
-daily_budget int
-start_date date
-end_date date
-status text
-google_campaign_i
-d
+field - type
+id - UUID
+name - text
+objective - text
+campaign_type - text
+daily_budget - int
+start_date - date
+end_date - date
+status - text
+google_campaign_id - text
+ad_group_name - text
+ad_headline - text
+ad_description - text
+asset_url - text
+created_at - timestamp
 
-text
-
-ad_group_name text
-ad_headline text
-ad_description text
-asset_url text
-
-created_at timestamp
 You are free to modify / add fields as you think appropriate.
 
 ➤ 2. Get all campaigns
@@ -92,6 +87,7 @@ client = GoogleAdsClient.load_from_storage()
 ○ Ad Group
 ○ Ad
 ○ Asset (If needed)
+
 4. Preferably create a Demand Gen campaign, but not mandatory.
 ○ Any campaign objective (Sales, Leads, Traffic, Engagement) is allowed.
 ○ Candidate may choose any campaign type they are comfortable implementing.
@@ -164,7 +160,6 @@ Candidates must submit:
 6. Evaluation Criteria
 Category Weight
 Code Quality & Structure 25%
-
 Backend/API Design 25%
 Google Ads Integration 20%
 React UI/UX 20%
