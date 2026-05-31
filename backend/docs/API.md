@@ -80,6 +80,43 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:5000/api/campaigns -Body $body -ContentType "application/json"
 ```
 
+## List campaigns
+
+**GET** `/api/campaigns`
+
+Returns every campaign stored in PostgreSQL, **newest first**. No request body.
+
+Response `200`:
+
+```json
+{
+  "data": [
+    {
+      "id": "uuid-here",
+      "name": "Winter Promo",
+      "status": "DRAFT",
+      "google_campaign_id": null,
+      ...
+    }
+  ]
+}
+```
+
+If there are no campaigns yet, `data` is an empty array `[]`.
+
+Example:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:5000/api/campaigns
+```
+
+To see full JSON in PowerShell:
+
+```powershell
+$r = Invoke-RestMethod -Method Get -Uri http://127.0.0.1:5000/api/campaigns
+$r.data | ConvertTo-Json -Depth 5
+```
+
 ## Health check
 
 **GET** `/api/health`

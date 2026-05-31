@@ -67,6 +67,11 @@ def create_campaign(payload: dict) -> Campaign:
     return campaign
 
 
+def list_campaigns() -> list[Campaign]:
+    """Return all campaigns, newest first."""
+    return Campaign.query.order_by(Campaign.created_at.desc()).all()
+
+
 def _parse_positive_int(value, field_name: str) -> int:
     try:
         number = int(value)
