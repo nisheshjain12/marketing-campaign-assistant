@@ -17,3 +17,5 @@ dist/
 # IDE
 .idea/
 .vscode/
+
+backend/get_token.py
