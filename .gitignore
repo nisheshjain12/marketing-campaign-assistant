@@ -19,3 +19,5 @@ dist/
 .vscode/
 
 backend/get_token.py
+
+backend/google-ads.yaml
