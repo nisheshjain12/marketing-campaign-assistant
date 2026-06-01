@@ -117,6 +117,57 @@ $r = Invoke-RestMethod -Method Get -Uri http://127.0.0.1:5000/api/campaigns
 $r.data | ConvertTo-Json -Depth 5
 ```
 
+## Publish campaign to Google Ads
+
+**POST** `/api/campaigns/<id>/publish`
+
+Reads the campaign from PostgreSQL, creates entities in Google Ads, stores `google_campaign_id`, sets `status = "PUBLISHED"`.
+
+Requires Google Ads credentials — see [GOOGLE_ADS_SETUP.md](./GOOGLE_ADS_SETUP.md).
+
+No request body.
+
+Response `200`:
+
+```json
+{
+  "data": {
+    "id": "uuid-here",
+    "status": "PUBLISHED",
+    "google_campaign_id": "12345678901",
+    ...
+  }
+}
+```
+
+Response `400` — already published or unsupported campaign type.
+
+Response `404` — unknown campaign id.
+
+Response `502` — Google Ads API error (message in `error.message`).
+
+Example:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/api/campaigns/YOUR-UUID-HERE/publish"
+```
+
+## Pause campaign
+
+**POST** `/api/campaigns/<id>/pause`
+
+Pauses the campaign in Google Ads and sets local `status = "PAUSED"`.
+
+No request body.
+
+Response `200` — updated campaign with `status: "PAUSED"`.
+
+Example:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/api/campaigns/YOUR-UUID-HERE/pause"
+```
+
 ## Health check
 
 **GET** `/api/health`

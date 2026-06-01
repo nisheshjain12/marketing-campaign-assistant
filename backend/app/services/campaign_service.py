@@ -1,8 +1,10 @@
 from datetime import date
+from uuid import UUID
 
-from app.errors import ValidationError
+from app.errors import NotFoundError, ValidationError
 from app.extensions import db
 from app.models import Campaign
+from app.services import google_ads_service
 
 REQUIRED_FIELDS = (
     "name",
@@ -70,6 +72,68 @@ def create_campaign(payload: dict) -> Campaign:
 def list_campaigns() -> list[Campaign]:
     """Return all campaigns, newest first."""
     return Campaign.query.order_by(Campaign.created_at.desc()).all()
+
+
+def get_campaign(campaign_id: str) -> Campaign:
+    """Load one campaign by UUID or raise NotFoundError."""
+    campaign = db.session.get(Campaign, _parse_uuid(campaign_id))
+    if campaign is None:
+        raise NotFoundError(f"Campaign not found: {campaign_id}")
+    return campaign
+
+
+def publish_campaign(campaign_id: str) -> Campaign:
+    """Publish a local DRAFT campaign to Google Ads."""
+    campaign = get_campaign(campaign_id)
+
+    if campaign.status == "PUBLISHED":
+        raise ValidationError(
+            "Campaign already published",
+            details=["This campaign has already been sent to Google Ads"],
+        )
+
+    if campaign.campaign_type.upper() != "SEARCH":
+        raise ValidationError(
+            "Unsupported campaign type",
+            details=["Only SEARCH campaigns are supported in this version"],
+        )
+
+    google_campaign_id = google_ads_service.publish_search_campaign(campaign)
+
+    campaign.google_campaign_id = google_campaign_id
+    campaign.status = "PUBLISHED"
+    db.session.commit()
+    return campaign
+
+
+def pause_campaign(campaign_id: str) -> Campaign:
+    """Pause a published campaign in Google Ads and update local status."""
+    campaign = get_campaign(campaign_id)
+
+    if not campaign.google_campaign_id:
+        raise ValidationError(
+            "Campaign is not published",
+            details=["Publish the campaign before trying to pause it"],
+        )
+
+    if campaign.status == "PAUSED":
+        raise ValidationError(
+            "Campaign already paused",
+            details=["This campaign is already paused"],
+        )
+
+    google_ads_service.pause_campaign(campaign.google_campaign_id)
+
+    campaign.status = "PAUSED"
+    db.session.commit()
+    return campaign
+
+
+def _parse_uuid(value: str) -> UUID:
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        raise NotFoundError(f"Campaign not found: {value}")
 
 
 def _parse_positive_int(value, field_name: str) -> int:
