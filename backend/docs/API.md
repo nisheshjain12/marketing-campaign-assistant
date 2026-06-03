@@ -4,6 +4,8 @@ Base URL: `http://localhost:5000`
 
 All responses use JSON. Success payloads are wrapped in `{ "data": ... }`.
 
+> **Google Ads:** Publish and pause use a **mock** service (no real API). See [MOCK_MODE.md](./MOCK_MODE.md).
+
 ## Create campaign (local DB only)
 
 **POST** `/api/campaigns`
@@ -121,9 +123,7 @@ $r.data | ConvertTo-Json -Depth 5
 
 **POST** `/api/campaigns/<id>/publish`
 
-Reads the campaign from PostgreSQL, creates entities in Google Ads, stores `google_campaign_id`, sets `status = "PUBLISHED"`.
-
-Requires Google Ads credentials — see [GOOGLE_ADS_SETUP.md](./GOOGLE_ADS_SETUP.md).
+Reads the campaign from PostgreSQL, assigns a mock `google_campaign_id`, sets `status = "PUBLISHED"`. No external API call.
 
 No request body.
 
@@ -144,8 +144,6 @@ Response `400` — already published or unsupported campaign type.
 
 Response `404` — unknown campaign id.
 
-Response `502` — Google Ads API error (message in `error.message`).
-
 Example:
 
 ```powershell
@@ -156,7 +154,7 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/api/campaigns/YOUR-UU
 
 **POST** `/api/campaigns/<id>/pause`
 
-Pauses the campaign in Google Ads and sets local `status = "PAUSED"`.
+Mocks pausing in Google Ads and sets local `status = "PAUSED"`.
 
 No request body.
 

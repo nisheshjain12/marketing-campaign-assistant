@@ -1,6 +1,10 @@
-# Google Ads setup guide
+# Google Ads setup guide (real API — optional)
 
-This backend publishes **Search campaigns** to a real Google Ads **test account** using the official Python library.
+> **Current project:** Google Ads is **mocked**. You do not need this guide to run the app. See [MOCK_MODE.md](./MOCK_MODE.md).
+
+This document is for when you replace the mock with the real API.
+
+This backend can publish **Search campaigns** to a Google Ads **test account** using the official Python library.
 
 ## What you need
 

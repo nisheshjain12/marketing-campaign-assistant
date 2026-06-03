@@ -19,5 +19,6 @@ dist/
 .vscode/
 
 backend/get_token.py
-
+backend/client_secrets.json
 backend/google-ads.yaml
+backend/.env
