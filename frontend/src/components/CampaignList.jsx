@@ -86,6 +86,11 @@ export default function CampaignList({ campaigns, loading, onRefresh }) {
                       Pause
                     </button>
                   )}
+                  {c.status === 'PAUSED' && (
+                    <button className="btn btn-warning" onClick={() => handlePublish(c.id)}>
+                      Resume
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
