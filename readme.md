@@ -1,166 +1,249 @@
-# Full-Stack Assignment — Pathik AI
-### React + Python (Flask / FastAPI) + PostgreSQL + Google Ads API
+# Marketing Campaign Assistant
 
-## Objective
+A full-stack web application to create, manage, and publish digital marketing campaigns from a single interface.
 
-Build a small full-stack application that allows a user to:
-1. Create a marketing campaign (stored locally in PostgreSQL)
-2. Publish the campaign to a real Google Ads account using the Google Ads API
-Note: You should be creating Inactive campaigns(Or control by startdate)
+---
 
-3. Use any appropriate campaign objective (e.g., Sales, Leads, Website Traffic).
-4. Preferably creating a Search Campaign completing a basic campaign creation is
-acceptable.
+## 1. What This App Does (For Everyone)
 
-## This assignment tests:
-● API design
-● React frontend
-● Flask backend
-● PostgreSQL integration
-● Google Ads API usage
-● Code quality & documentation
+- **What problem it solves**
+  - Managing online ads normally means logging into Google Ads, navigating multiple screens, and filling complex forms
+  - This app gives you one simple page to create and manage campaigns without needing to touch Google Ads directly
 
-1. Backend — Python Flask (If using FastAPI then consider equivalent)
-Tech Requirements
-● Python 3.x
-● Flask
-● PostgreSQL
-● SQLAlchemy (preferred)
-● Google Ads API using GoogleAdsClient (This is the official library for Google Ads API requests.)
-Google Ads Requirements
-You will need to configure:
-● Developer token
-● Client ID
-● Client secret
-● Refresh token
-● Login customer ID
-● Customer account ID
+- **Create a campaign**
+  - Fill in a short form: campaign name, goal (traffic, leads, or sales), daily budget, start and end dates
+  - Write the ad text — a headline and a short description that people will see in your ad
+  - Click **Save Locally** — the campaign is saved to the database with a grey **DRAFT** badge
 
-(You may need to create your own Google Ads test account.)
+- **See all your campaigns**
+  - Every saved campaign appears in a table below the form
+  - The table shows: name, goal, daily budget, start date, status, and Google Campaign ID
 
-Backend Functional Requirements
-➤ 1. Create a campaign (LOCAL DB only)
-Implement an API:
+- **Publish to Google Ads**
+  - Click the green **Publish** button next to any draft campaign
+  - The app sends the campaign to Google Ads and the status badge turns green: **PUBLISHED**
+  - A Google Campaign ID appears in the table confirming it's live
 
-POST /api/campaigns
+- **Pause a campaign**
+  - Click the amber **Pause** button next to any published campaign to stop it temporarily
+  - Status changes to **PAUSED** — no more spend until you decide to re-publish
 
-The API should:
-● Validate request data
-● Store the campaign in PostgreSQL
-● Set status = "DRAFT" by default
+- **Safe to explore**
+  - The Google Ads integration runs in **mock mode** — it simulates publishing without real API calls or charges
+  - No Google account is needed to use and test the full workflow
 
-Important:
-You can design the database schema yourself. The provided example is only for reference.
-Example (not mandatory):
-field - type
-id - UUID
-name - text
-objective - text
-campaign_type - text
-daily_budget - int
-start_date - date
-end_date - date
-status - text
-google_campaign_id - text
-ad_group_name - text
-ad_headline - text
-ad_description - text
-asset_url - text
-created_at - timestamp
+---
 
-You are free to modify / add fields as you think appropriate.
+## 2. Technical Overview
 
-➤ 2. Get all campaigns
-GET /api/campaigns
+### Stack
 
-➤ 3. Publish a campaign to Google Ads
-POST /api/campaigns/<id>/publish
+- **Frontend** — React 18, Vite 4, Axios
+- **Backend** — Python 3, Flask 3, Flask-CORS
+- **Database** — PostgreSQL, SQLAlchemy ORM, Flask-Migrate (Alembic)
+- **Google Ads** — Mocked via `google_ads_service.py` (no real API calls)
 
-This should:
-1. Read campaign details from local DB.
-2. Initialize Google Ads client:
+### Architecture
 
-client = GoogleAdsClient.load_from_storage()
+```
+Browser (React — port 5173)
+    │  HTTP/JSON via Axios
+    ▼
+Flask REST API (port 5000)
+    │  SQLAlchemy ORM
+    ▼
+PostgreSQL (campaigns table)
+    │  google_ads_service.py (mock)
+    ▼
+[Mock] Google Ads — returns fake campaign ID, no real calls
+```
 
-3. Create:
-○ Campaign
-○ Ad Group
-○ Ad
-○ Asset (If needed)
+### Backend
 
-4. Preferably create a Demand Gen campaign, but not mandatory.
-○ Any campaign objective (Sales, Leads, Traffic, Engagement) is allowed.
-○ Candidate may choose any campaign type they are comfortable implementing.
-5. Store the returned Google Campaign ID in DB.
-6. Update status to PUBLISHED.
+- **App factory** — `backend/app/__init__.py` creates the Flask app, registers CORS, blueprints, and error handlers
+- **Routes** — `backend/app/routes/campaigns.py` — thin HTTP layer, delegates to service
 
-➤ 4. Disable Campaign
-So that your account is not charged.
+  | Method | Endpoint | Description |
+  |--------|----------|-------------|
+  | `GET` | `/api/health` | Health check |
+  | `GET` | `/api/campaigns` | List all campaigns (newest first) |
+  | `POST` | `/api/campaigns` | Create campaign (status: `DRAFT`) |
+  | `POST` | `/api/campaigns/<id>/publish` | Publish to Google Ads (status: `PUBLISHED`) |
+  | `POST` | `/api/campaigns/<id>/pause` | Pause campaign (status: `PAUSED`) |
 
-2. Frontend — React
-Tech Requirements
-● React
-● Axios or Fetch
-● Basic state management
+- **Service layer** — `backend/app/services/campaign_service.py` — all business logic and validation
+  - Required fields: `name`, `objective`, `daily_budget`, `start_date`, `ad_group_name`, `ad_headline`, `ad_description`
+  - `daily_budget` must be a positive integer
+  - `end_date` must be on or after `start_date` if provided
+  - Status transitions enforced: cannot publish twice, cannot pause a draft
 
-UI Requirements
-➤ Campaign Form
-Form fields (recommended but flexible):
-● Campaign Name
-● Objective (input or select)
-● Daily Budget
-● Start Date / End Date
-● Campaign Type (default “Demand Gen” but editable)
-● Ad Group Name
-● Ad Headline
-● Ad Description
-● Asset URL
+- **Google Ads mock** — `backend/app/services/google_ads_service.py`
+  - `publish_search_campaign()` returns a random 10-digit string as a fake Google campaign ID
+  - `pause_campaign()` is a no-op — nothing is sent to Google
+  - Swap `USE_MOCK = True` → `False` and restore real `GoogleAdsClient` code to connect to a real account
 
-Buttons:
+- **Database schema** — single `campaigns` table
 
-● Save Locally → Calls POST /api/campaigns
-● Publish to Google Ads → Calls POST /api/campaigns/{id}/publish
+  | Column | Type | Notes |
+  |--------|------|-------|
+  | `id` | UUID | Auto-generated primary key |
+  | `name` | String | Campaign name |
+  | `objective` | String | `TRAFFIC`, `LEADS`, `SALES`, `AWARENESS` |
+  | `campaign_type` | String | `SEARCH` (default) |
+  | `daily_budget` | Integer | USD per day |
+  | `start_date` | Date | Required |
+  | `end_date` | Date | Optional |
+  | `status` | String | `DRAFT` → `PUBLISHED` → `PAUSED` |
+  | `google_campaign_id` | String | Null until published |
+  | `ad_group_name` | String | Ad group name |
+  | `ad_headline` | String | Ad title text |
+  | `ad_description` | Text | Ad body text |
+  | `asset_url` | Text | Optional landing page URL |
+  | `created_at` | Timestamp | UTC, auto-set on create |
 
-➤ Campaign Listing
-List all saved campaigns:
-● Name
-● Status (DRAFT/PUBLISHED)
-● Google Campaign ID
-● Button: “Publish”
-● Button: “Pause” (optional)
+- **Error responses** — consistent JSON shape across all endpoints
+  ```json
+  { "error": { "message": "...", "details": ["field is required", "..."] } }
+  ```
 
-3. Project Expectations
-✔ Clean code & folder structure
-✔ README containing:
-● Setup instructions
-● How to run backend
-● How to run frontend
-● Environment variables
-● Google Ads setup steps
-● API documentation
+### Frontend
 
-✔ Proper API error handling
+- **`src/App.jsx`** — top-level component; fetches campaign list on load and after every action
+- **`src/components/CampaignForm.jsx`** — controlled form; posts to `POST /api/campaigns`; clears on success
+- **`src/components/CampaignList.jsx`** — renders campaigns as a table with coloured status badges and action buttons
+- **`src/api/campaigns.js`** — Axios instance; base URL reads from `VITE_API_URL` env var (defaults to `http://127.0.0.1:5000`)
 
-✔ Validation on inputs
-✔ Simple UI but functional
+---
 
-4. Optional Bonus
-● Docker / Docker Compose
-● Form validation (Yup, Formik)
-● Logging on backend
-● Unit tests
-● Redux or Zustand state management
+## 3. How to Run and Test Locally
 
-5. Submission Requirements
-Candidates must submit:
-● GitHub repository
-● README with complete instructions
-● Brief design notes (how you structured backend, why)
+### Prerequisites
 
-6. Evaluation Criteria
-Category Weight
-Code Quality & Structure 25%
-Backend/API Design 25%
-Google Ads Integration 20%
-React UI/UX 20%
-Documentation 10%
+- [Python 3.10+](https://www.python.org/downloads/)
+- [Node.js 18+](https://nodejs.org/) (includes npm)
+- [PostgreSQL 14+](https://www.postgresql.org/download/) installed and running
+
+---
+
+### Step 1 — Clone the repository
+
+```bash
+git clone https://github.com/nisheshjain12/marketing-campaign-assistant.git
+cd marketing-campaign-assistant
+```
+
+---
+
+### Step 2 — Create the database
+
+```bash
+psql -U postgres
+```
+```sql
+CREATE DATABASE campaign_assistant;
+\q
+```
+
+---
+
+### Step 3 — Configure the backend
+
+```bash
+cd backend
+cp .env.example .env    # Mac/Linux
+# OR on Windows PowerShell:
+copy .env.example .env
+```
+
+- Open `.env` and set your PostgreSQL password:
+  ```
+  DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/campaign_assistant
+  CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+  ```
+
+---
+
+### Step 4 — Install backend dependencies and apply migrations
+
+```bash
+# Create and activate virtual environment
+python -m venv venv
+
+# Mac/Linux:
+source venv/bin/activate
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+
+# Apply database migrations (creates the campaigns table)
+flask db upgrade
+```
+
+---
+
+### Step 5 — Start the backend server
+
+```bash
+python run.py
+```
+
+- Expected output: `* Running on http://127.0.0.1:5000`
+- Leave this terminal open
+
+---
+
+### Step 6 — Install and start the frontend
+
+Open a **second terminal**:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+- Expected output: `➜  Local:   http://localhost:5173/`
+- Open [http://localhost:5173](http://localhost:5173) in your browser
+
+---
+
+### Step 7 — Test the full workflow in the browser
+
+- **Health check** — visit `http://127.0.0.1:5000/api/health` → should return `{"data":{"status":"ok"}}`
+- **Create a campaign** — fill the form and click **Save Locally**
+  - Campaign appears in the list with a grey **DRAFT** badge
+  - `Google ID` column shows `—`
+- **Test validation** — submit the form with an empty name or budget of `0`
+  - A red error message should appear; no campaign should be added to the list
+- **Publish** — click the green **Publish** button on a DRAFT row
+  - Status changes to **PUBLISHED** (green badge)
+  - A 10-digit mock Google Campaign ID appears in the table
+- **Pause** — click the amber **Pause** button on a PUBLISHED row
+  - Status changes to **PAUSED** (amber badge)
+- **Persistence check** — stop the backend (Ctrl+C), restart it (`python run.py`), reload the browser
+  - All campaigns should still be there (data lives in PostgreSQL)
+
+---
+
+### Step 8 — Run the automated backend tests
+
+```bash
+# Inside backend/ with venv active
+python test_backend.py
+```
+
+- Expected result: `=== Results: 33 passed, 0 failed ===`
+- Covers: health check, create, validation errors, list ordering, publish, pause, not-found, business rules, and database persistence
+
+---
+
+### Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `flask db upgrade` fails | Check `DATABASE_URL` in `.env` is correct and PostgreSQL is running |
+| Browser shows "Could not load campaigns" | Confirm Flask is running on port 5000; frontend calls `http://127.0.0.1:5000` not `localhost` |
+| CORS error in browser console | Add `CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173` to `backend/.env` and restart Flask |
+| `psycopg2` install error on Linux | Run `sudo apt install libpq-dev` first |
+| Port 5173 already in use | Stop other Vite processes or change port in `frontend/vite.config.js` |
