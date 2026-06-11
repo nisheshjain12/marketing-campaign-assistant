@@ -1,18 +1,30 @@
-# Google Ads mock mode
+# Google Ads mock mode (offline fallback)
 
-The backend uses a **mock** Google Ads service (`app/services/google_ads_service.py`).
-No `google-ads.yaml`, developer token, or OAuth setup is required.
+The backend talks to the **real** Google Ads API by default (see
+[GOOGLE_ADS_SETUP.md](./GOOGLE_ADS_SETUP.md)). For frontend work or demos without
+credentials, you can switch [`app/services/google_ads_service.py`](../app/services/google_ads_service.py)
+into an **offline mock** that makes no API calls.
 
-## What still works
+## Enable mock mode
 
-| Endpoint | Behavior |
-|----------|----------|
-| `POST /api/campaigns` | Saves campaign as `DRAFT` in PostgreSQL |
-| `GET /api/campaigns` | Lists all campaigns |
-| `POST /api/campaigns/<id>/publish` | Sets `status=PUBLISHED` and a fake `google_campaign_id` |
-| `POST /api/campaigns/<id>/pause` | Sets `status=PAUSED` |
+In `backend/.env`:
 
-Publish/pause do **not** call Google. IDs look like real numeric campaign IDs for the UI.
+```
+GOOGLE_ADS_USE_MOCK=true
+```
+
+No `google-ads.yaml`, developer token, or OAuth setup is required while this is on.
+
+## What each mode does
+
+| Endpoint | Real mode (`false`, default) | Mock mode (`true`) |
+|----------|------------------------------|--------------------|
+| `POST /api/campaigns` | Saves campaign as `DRAFT` in PostgreSQL | same |
+| `GET /api/campaigns` | Lists all campaigns | same |
+| `POST /api/campaigns/<id>/publish` | Creates a real **PAUSED** Search campaign in Google Ads, stores the real `google_campaign_id`, sets `status=PUBLISHED` | Sets `status=PUBLISHED` with a fake numeric `google_campaign_id` (no API call) |
+| `POST /api/campaigns/<id>/pause` | Sets the Google Ads campaign to PAUSED | Sets `status=PAUSED` (no API call) |
+
+The mock returns realistic-looking numeric IDs so the UI behaves identically.
 
 ## Run backend
 
@@ -23,9 +35,8 @@ pip install -r requirements.txt
 python run.py
 ```
 
-## Switch to real Google Ads later
+## Switch back to the real API
 
-1. Add `google-ads>=24.0.0` to `requirements.txt`
-2. Replace `google_ads_service.py` with the real implementation
-3. Add `GOOGLE_ADS_CUSTOMER_ID` to `.env` and `google-ads.yaml`
-4. See `GOOGLE_ADS_SETUP.md`
+Set `GOOGLE_ADS_USE_MOCK=false` (or remove it) and make sure `google-ads.yaml`
+and `GOOGLE_ADS_CUSTOMER_ID` are configured per
+[GOOGLE_ADS_SETUP.md](./GOOGLE_ADS_SETUP.md).

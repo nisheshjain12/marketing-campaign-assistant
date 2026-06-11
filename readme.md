@@ -28,9 +28,9 @@ A full-stack web application to create, manage, and publish digital marketing ca
   - Click the amber **Pause** button next to any published campaign to stop it temporarily
   - Status changes to **PAUSED** — no more spend until you decide to re-publish
 
-- **Safe to explore**
-  - The Google Ads integration runs in **mock mode** — it simulates publishing without real API calls or charges
-  - No Google account is needed to use and test the full workflow
+- **Safe to publish**
+  - The app publishes to a **real Google Ads test account** — campaigns are always created **PAUSED**, so a test account is never charged
+  - Prefer to explore without credentials? Flip on an **offline mock** (`GOOGLE_ADS_USE_MOCK=true`) that simulates publishing with no API calls — no Google account needed
 
 ---
 
@@ -41,7 +41,7 @@ A full-stack web application to create, manage, and publish digital marketing ca
 - **Frontend** — React 18, Vite 4, Axios
 - **Backend** — Python 3, Flask 3, Flask-CORS
 - **Database** — PostgreSQL, SQLAlchemy ORM, Flask-Migrate (Alembic)
-- **Google Ads** — Mocked via `google_ads_service.py` (no real API calls)
+- **Google Ads** — Real Google Ads API via the official `google-ads` library (API pinned to `v22`); optional offline mock
 
 ### Architecture
 
@@ -53,9 +53,10 @@ Flask REST API (port 5000)
     │  SQLAlchemy ORM
     ▼
 PostgreSQL (campaigns table)
-    │  google_ads_service.py (mock)
+    │  google_ads_service.py
     ▼
-[Mock] Google Ads — returns fake campaign ID, no real calls
+Google Ads API (v22) — creates a real PAUSED Search campaign
+   (or an offline mock when GOOGLE_ADS_USE_MOCK=true)
 ```
 
 ### Backend
@@ -77,10 +78,12 @@ PostgreSQL (campaigns table)
   - `end_date` must be on or after `start_date` if provided
   - Status transitions enforced: cannot publish twice, cannot pause a draft
 
-- **Google Ads mock** — `backend/app/services/google_ads_service.py`
-  - `publish_search_campaign()` returns a random 10-digit string as a fake Google campaign ID
-  - `pause_campaign()` is a no-op — nothing is sent to Google
-  - Swap `USE_MOCK = True` → `False` and restore real `GoogleAdsClient` code to connect to a real account
+- **Google Ads integration** — `backend/app/services/google_ads_service.py`
+  - `publish_search_campaign()` creates Budget → Search Campaign (**PAUSED**) → Ad Group → Responsive Search Ad in a real Google Ads test account, and returns the real campaign ID
+  - `pause_campaign()` sets the Google Ads campaign status to PAUSED
+  - API pinned to `v22` (newest version with the simple `start_date`/`end_date` fields); sets `contains_eu_political_advertising` (required v22+); auto-pads to the 3-headline / 2-description minimum Responsive Search Ads require
+  - Set `GOOGLE_ADS_USE_MOCK=true` for an offline mock that returns a fake ID with no API calls — see [docs/MOCK_MODE.md](backend/docs/MOCK_MODE.md)
+  - Full credential setup: [docs/GOOGLE_ADS_SETUP.md](backend/docs/GOOGLE_ADS_SETUP.md)
 
 - **Database schema** — single `campaigns` table
 
@@ -155,11 +158,18 @@ cp .env.example .env    # Mac/Linux
 copy .env.example .env
 ```
 
-- Open `.env` and set your PostgreSQL password:
+- Open `.env` and set your PostgreSQL password (and the Google Ads target account):
   ```
   DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/campaign_assistant
   CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+  GOOGLE_ADS_CUSTOMER_ID=1234567890   # your test client account (digits only)
+  GOOGLE_ADS_USE_MOCK=false           # set true to skip Google and use the offline mock
   ```
+
+- **Google Ads credentials** — to publish for real, create `backend/google-ads.yaml`
+  with your developer token, OAuth client, refresh token, and `login_customer_id`,
+  following [docs/GOOGLE_ADS_SETUP.md](backend/docs/GOOGLE_ADS_SETUP.md). To skip this
+  entirely, set `GOOGLE_ADS_USE_MOCK=true` and no credentials are needed.
 
 ---
 
@@ -218,7 +228,8 @@ npm run dev
   - A red error message should appear; no campaign should be added to the list
 - **Publish** — click the green **Publish** button on a DRAFT row
   - Status changes to **PUBLISHED** (green badge)
-  - A 10-digit mock Google Campaign ID appears in the table
+  - A real Google Campaign ID appears in the table; the campaign is created **PAUSED** in your Google Ads test account (verify it in the Google Ads UI)
+  - *(With `GOOGLE_ADS_USE_MOCK=true`, a fake 10-digit ID appears instead and nothing is sent to Google)*
 - **Pause** — click the amber **Pause** button on a PUBLISHED row
   - Status changes to **PAUSED** (amber badge)
 - **Persistence check** — stop the backend (Ctrl+C), restart it (`python run.py`), reload the browser

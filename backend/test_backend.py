@@ -3,8 +3,12 @@ Backend API smoke test — run: python test_backend.py
 """
 
 import json
+import os
 import sys
 import uuid
+
+# Force the offline mock so the suite never calls Google Ads or needs credentials.
+os.environ["GOOGLE_ADS_USE_MOCK"] = "true"
 
 from app import create_app
 

@@ -18,7 +18,13 @@ dist/
 .idea/
 .vscode/
 
+# Google Ads secrets — never commit
 backend/get_token.py
+backend/get_refresh_token.py
+backend/generate_user_credentials.py
+backend/_smoke_google_ads.py
+backend/_diag_accounts.py
+backend/client_secret*.json
 backend/client_secrets.json
 backend/google-ads.yaml
 backend/.env
