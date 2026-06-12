@@ -22,7 +22,7 @@ A full-stack web application to create, manage, and publish digital marketing ca
 - **Publish to Google Ads**
   - Click the green **Publish** button next to any draft campaign
   - The app sends the campaign to Google Ads and the status badge turns green: **PUBLISHED**
-  - A Google Campaign ID appears in the table confirming it's live
+  - A Google Campaign ID appears, confirming it's in Google Ads — created **Paused** there (so you're never charged), even though our app status reads **PUBLISHED**
 
 - **Pause or resume a campaign**
   - Click the amber **Pause** button next to any published campaign to stop it

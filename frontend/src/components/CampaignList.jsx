@@ -62,6 +62,11 @@ export default function CampaignList({ campaigns, loading, onRefresh }) {
   return (
     <div className="card">
       <h2>Campaigns</h2>
+      <p className="muted" style={{ marginTop: '-0.5rem', fontSize: '0.85rem' }}>
+        ℹ️ Campaigns are published to Google Ads as <strong>Paused</strong> so your account is never
+        charged. A <strong>PUBLISHED</strong> status here means it exists in Google Ads — it will show
+        as <em>Paused</em> there until you actively run it.
+      </p>
       <div className="table-wrap">
         <table>
           <thead>
