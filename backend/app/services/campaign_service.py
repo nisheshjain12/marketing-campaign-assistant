@@ -129,6 +129,29 @@ def pause_campaign(campaign_id: str) -> Campaign:
     return campaign
 
 
+def resume_campaign(campaign_id: str) -> Campaign:
+    """Resume (enable) a paused campaign in Google Ads and update local status."""
+    campaign = get_campaign(campaign_id)
+
+    if not campaign.google_campaign_id:
+        raise ValidationError(
+            "Campaign is not published",
+            details=["Publish the campaign before trying to resume it"],
+        )
+
+    if campaign.status != "PAUSED":
+        raise ValidationError(
+            "Campaign is not paused",
+            details=["Only paused campaigns can be resumed"],
+        )
+
+    google_ads_service.resume_campaign(campaign.google_campaign_id)
+
+    campaign.status = "PUBLISHED"
+    db.session.commit()
+    return campaign
+
+
 def _parse_uuid(value: str) -> UUID:
     try:
         return UUID(str(value))

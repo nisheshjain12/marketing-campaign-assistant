@@ -46,3 +46,13 @@ def pause_campaign(campaign_id):
     """
     campaign = campaign_service.pause_campaign(campaign_id)
     return jsonify({"data": campaign.to_dict()}), 200
+
+
+@api_bp.route("/campaigns/<campaign_id>/resume", methods=["POST"])
+def resume_campaign(campaign_id):
+    """
+    Resume (re-enable) a paused campaign in Google Ads.
+    Sets the existing Google Ads campaign back to ENABLED — no duplicate is created.
+    """
+    campaign = campaign_service.resume_campaign(campaign_id)
+    return jsonify({"data": campaign.to_dict()}), 200

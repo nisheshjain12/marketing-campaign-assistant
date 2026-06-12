@@ -62,6 +62,13 @@ def pause_campaign(google_campaign_id: str) -> None:
     return _real_pause(google_campaign_id)
 
 
+def resume_campaign(google_campaign_id: str) -> None:
+    """Set a Google Ads campaign's status to ENABLED (resume a paused campaign)."""
+    if USE_MOCK:
+        return _mock_resume(google_campaign_id)
+    return _real_resume(google_campaign_id)
+
+
 # --------------------------------------------------------------------------- #
 # Offline mock.
 # --------------------------------------------------------------------------- #
@@ -71,6 +78,10 @@ def _mock_publish(campaign: Campaign) -> str:
 
 
 def _mock_pause(google_campaign_id: str) -> None:
+    _ = google_campaign_id
+
+
+def _mock_resume(google_campaign_id: str) -> None:
     _ = google_campaign_id
 
 
@@ -94,13 +105,22 @@ def _real_publish(campaign: Campaign) -> str:
 
 
 def _real_pause(google_campaign_id: str) -> None:
+    _set_campaign_status(google_campaign_id, "PAUSED")
+
+
+def _real_resume(google_campaign_id: str) -> None:
+    _set_campaign_status(google_campaign_id, "ENABLED")
+
+
+def _set_campaign_status(google_campaign_id: str, status: str) -> None:
+    """Update only the status of an existing campaign (PAUSED / ENABLED)."""
     customer_id, headers = _rest_context()
     resource_name = f"customers/{customer_id}/campaigns/{google_campaign_id}"
     _mutate(
         "campaigns",
         customer_id,
         headers,
-        [{"update": {"resourceName": resource_name, "status": "PAUSED"}, "updateMask": "status"}],
+        [{"update": {"resourceName": resource_name, "status": status}, "updateMask": "status"}],
     )
 
 

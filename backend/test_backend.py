@@ -118,6 +118,20 @@ def main():
     r = client.post(f"/api/campaigns/{campaign_id}/pause")
     check("Double pause returns 400", r.status_code == 400)
 
+    # 6b. Resume
+    print("\n6b. Resume (POST /api/campaigns/<id>/resume)")
+    r = client.post(f"/api/campaigns/{campaign_id}/resume")
+    check("Resume returns 200", r.status_code == 200)
+    resumed = r.get_json().get("data", {})
+    check("Resume sets status back to PUBLISHED", resumed.get("status") == "PUBLISHED")
+    check("Resume keeps same google_campaign_id", resumed.get("google_campaign_id") == google_id)
+
+    r = client.post(f"/api/campaigns/{campaign_id}/resume")
+    check("Resume of non-paused returns 400", r.status_code == 400)
+
+    # restore PAUSED so the persistence checks below still hold
+    client.post(f"/api/campaigns/{campaign_id}/pause")
+
     # 7. Not found
     print("\n7. Not found")
     fake_id = str(uuid.uuid4())
@@ -144,6 +158,9 @@ def main():
     r = client.post(f"/api/campaigns/{draft_id}/pause")
     check("Pause draft returns 400", r.status_code == 400)
 
+    r = client.post(f"/api/campaigns/{draft_id}/resume")
+    check("Resume draft returns 400", r.status_code == 400)
+
     # 10. DB connectivity
     print("\n10. Database")
     with app.app_context():
@@ -162,6 +179,7 @@ def main():
     check("/api/campaigns GET+POST", "/api/campaigns" in rules)
     check("/api/campaigns/<id>/publish", "/api/campaigns/<campaign_id>/publish" in rules)
     check("/api/campaigns/<id>/pause", "/api/campaigns/<campaign_id>/pause" in rules)
+    check("/api/campaigns/<id>/resume", "/api/campaigns/<campaign_id>/resume" in rules)
 
     print(f"\n=== Results: {passed} passed, {failed} failed ===\n")
     return 0 if failed == 0 else 1

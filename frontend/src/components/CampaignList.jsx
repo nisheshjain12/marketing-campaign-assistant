@@ -1,4 +1,4 @@
-import { publishCampaign, pauseCampaign } from '../api/campaigns'
+import { publishCampaign, pauseCampaign, resumeCampaign } from '../api/campaigns'
 
 const STATUS_COLORS = {
   DRAFT: '#6b7280',
@@ -39,6 +39,15 @@ export default function CampaignList({ campaigns, loading, onRefresh }) {
       onRefresh()
     } catch (err) {
       alert(err.response?.data?.error?.message || 'Pause failed')
+    }
+  }
+
+  const handleResume = async (id) => {
+    try {
+      await resumeCampaign(id)
+      onRefresh()
+    } catch (err) {
+      alert(err.response?.data?.error?.message || 'Resume failed')
     }
   }
 
@@ -87,7 +96,7 @@ export default function CampaignList({ campaigns, loading, onRefresh }) {
                     </button>
                   )}
                   {c.status === 'PAUSED' && (
-                    <button className="btn btn-warning" onClick={() => handlePublish(c.id)}>
+                    <button className="btn btn-warning" onClick={() => handleResume(c.id)}>
                       Resume
                     </button>
                   )}

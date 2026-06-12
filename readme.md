@@ -24,9 +24,9 @@ A full-stack web application to create, manage, and publish digital marketing ca
   - The app sends the campaign to Google Ads and the status badge turns green: **PUBLISHED**
   - A Google Campaign ID appears in the table confirming it's live
 
-- **Pause a campaign**
-  - Click the amber **Pause** button next to any published campaign to stop it temporarily
-  - Status changes to **PAUSED** — no more spend until you decide to re-publish
+- **Pause or resume a campaign**
+  - Click the amber **Pause** button next to any published campaign to stop it
+  - Status changes to **PAUSED**; click **Resume** to re-enable the *same* campaign (back to **PUBLISHED**) — no duplicate is created
 
 - **Safe to publish**
   - The app publishes to a **real Google Ads test account** — campaigns are always created **PAUSED**, so a test account is never charged
@@ -71,6 +71,7 @@ Google Ads REST API (v22) — creates a real PAUSED Search campaign
   | `POST` | `/api/campaigns` | Create campaign (status: `DRAFT`) |
   | `POST` | `/api/campaigns/<id>/publish` | Publish to Google Ads (status: `PUBLISHED`) |
   | `POST` | `/api/campaigns/<id>/pause` | Pause campaign (status: `PAUSED`) |
+  | `POST` | `/api/campaigns/<id>/resume` | Resume a paused campaign (status: `PUBLISHED`) |
 
 - **Service layer** — `backend/app/services/campaign_service.py` — all business logic and validation
   - Required fields: `name`, `objective`, `daily_budget`, `start_date`, `ad_group_name`, `ad_headline`, `ad_description`
@@ -80,7 +81,7 @@ Google Ads REST API (v22) — creates a real PAUSED Search campaign
 
 - **Google Ads integration** — `backend/app/services/google_ads_service.py`
   - `publish_search_campaign()` creates Budget → Search Campaign (**PAUSED**) → Ad Group → Responsive Search Ad in a real Google Ads test account, and returns the real campaign ID
-  - `pause_campaign()` sets the Google Ads campaign status to PAUSED
+  - `pause_campaign()` sets the Google Ads campaign status to PAUSED; `resume_campaign()` sets the **same** campaign back to ENABLED (no duplicate created)
   - Calls the Google Ads **REST** `…:mutate` endpoints directly with `requests` (no gRPC / `google-ads` library); fetches an OAuth access token from the refresh token per request
   - API pinned to `v22` (newest with the simple `start_date`/`end_date` fields); sets `contains_eu_political_advertising` (required v22+); auto-pads to the 3-headline / 2-description RSA minimum
   - Set `GOOGLE_ADS_USE_MOCK=true` for an offline mock that returns a fake ID with no API calls — see [docs/MOCK_MODE.md](backend/docs/MOCK_MODE.md)
@@ -233,6 +234,8 @@ npm run dev
   - *(With `GOOGLE_ADS_USE_MOCK=true`, a fake 10-digit ID appears instead and nothing is sent to Google)*
 - **Pause** — click the amber **Pause** button on a PUBLISHED row
   - Status changes to **PAUSED** (amber badge)
+- **Resume** — click the **Resume** button on a PAUSED row
+  - Status changes back to **PUBLISHED**; the same Google campaign is re-enabled in Google Ads (no duplicate)
 - **Persistence check** — stop the backend (Ctrl+C), restart it (`python run.py`), reload the browser
   - All campaigns should still be there (data lives in PostgreSQL)
 
@@ -245,8 +248,8 @@ npm run dev
 python test_backend.py
 ```
 
-- Expected result: `=== Results: 33 passed, 0 failed ===`
-- Covers: health check, create, validation errors, list ordering, publish, pause, not-found, business rules, and database persistence
+- Expected result: `=== Results: 39 passed, 0 failed ===`
+- Covers: health check, create, validation errors, list ordering, publish, pause, resume, not-found, business rules, and database persistence
 
 ---
 

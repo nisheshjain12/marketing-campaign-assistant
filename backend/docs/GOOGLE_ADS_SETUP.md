@@ -195,8 +195,9 @@ It talks to Google over plain **HTTPS/REST** with `requests` — no gRPC.
   `login-customer-id` headers.
 - **Endpoints:** `POST …:mutate` under
   `https://googleads.googleapis.com/v22/customers/<customer_id>/` —
-  `campaignBudgets`, `campaigns`, `adGroups`, `adGroupAds`. Pause re-uses
-  `campaigns:mutate` with an `update` + `updateMask=status`.
+  `campaignBudgets`, `campaigns`, `adGroups`, `adGroupAds`. Pause and resume
+  re-use `campaigns:mutate` with an `update` (`status=PAUSED` / `ENABLED`) and
+  `updateMask=status`.
 - **API version is pinned to `v22`.** v23+ renamed `startDate` / `endDate` to
   `startDateTime` / `endDateTime`; v22 is the newest version with the simple
   date fields.

@@ -23,6 +23,7 @@ No `google-ads.yaml`, developer token, or OAuth setup is required while this is 
 | `GET /api/campaigns` | Lists all campaigns | same |
 | `POST /api/campaigns/<id>/publish` | Creates a real **PAUSED** Search campaign in Google Ads, stores the real `google_campaign_id`, sets `status=PUBLISHED` | Sets `status=PUBLISHED` with a fake numeric `google_campaign_id` (no API call) |
 | `POST /api/campaigns/<id>/pause` | Sets the Google Ads campaign to PAUSED | Sets `status=PAUSED` (no API call) |
+| `POST /api/campaigns/<id>/resume` | Sets the Google Ads campaign to ENABLED (status back to `PUBLISHED`) | Sets `status=PUBLISHED` (no API call) |
 
 The mock returns realistic-looking numeric IDs so the UI behaves identically.
 
