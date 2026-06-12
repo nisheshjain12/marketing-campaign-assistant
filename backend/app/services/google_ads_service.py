@@ -297,8 +297,13 @@ def _campaign_dates(campaign):
 
 
 def _final_url(campaign):
+    """Final URL for the ad. Google requires a scheme, so add https:// if missing."""
     url = (campaign.asset_url or "").strip()
-    return url or "https://www.example.com"
+    if not url:
+        return "https://www.example.com"
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
 
 
 def _dedupe_truncate(values, max_len):
