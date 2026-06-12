@@ -1,8 +1,9 @@
 # Google Ads setup guide (real API)
 
 This backend publishes real **Search** campaigns to a Google Ads **test account**
-using the official `google-ads` Python library. Campaigns are created **PAUSED**,
-so a test account is never charged.
+over the Google Ads **REST API** (plain HTTPS via `requests` — no gRPC or
+`google-ads` client library). Campaigns are created **PAUSED**, so a test account
+is never charged.
 
 > Want to run the app without Google credentials (e.g. frontend work)? Set
 > `GOOGLE_ADS_USE_MOCK=true` in `.env` — see [MOCK_MODE.md](./MOCK_MODE.md).
@@ -116,9 +117,12 @@ if __name__ == "__main__":
     main(p.parse_args().client_secrets_path)
 ```
 
-Run it (from `backend/`, with the venv active):
+Run it (from `backend/`, with the venv active). The helper needs the one-time dev
+dependency `google-auth-oauthlib` (only for generating the token — the running
+app does not use it):
 
 ```powershell
+.\venv\Scripts\python.exe -m pip install google-auth-oauthlib
 .\venv\Scripts\python.exe get_refresh_token.py -c "client_secret_XXX.json"
 ```
 
@@ -141,7 +145,6 @@ client_id: "YOUR_CLIENT_ID.apps.googleusercontent.com"
 client_secret: "YOUR_CLIENT_SECRET"
 refresh_token: "YOUR_REFRESH_TOKEN"          # Account B
 login_customer_id: "YOUR_TEST_MANAGER_ID"    # digits only, no dashes
-use_proto_plus: true
 ```
 
 `backend/.env`:
@@ -184,19 +187,27 @@ the campaign appears under the test client account with status **Paused**.
 ## How the integration works
 
 See [`app/services/google_ads_service.py`](../app/services/google_ads_service.py).
+It talks to Google over plain **HTTPS/REST** with `requests` — no gRPC.
 
-- **API version is pinned to `v22`.** v23+ renamed `Campaign.start_date` /
-  `end_date` to `start_date_time` / `end_date_time`; v22 is the newest version
-  that still uses the simple date fields the code (and Google's examples) expect.
+- **OAuth:** the refresh token (+ client id/secret) is exchanged at
+  `https://oauth2.googleapis.com/token` for a short-lived access token, sent as
+  `Authorization: Bearer …`. Every call also sends `developer-token` and
+  `login-customer-id` headers.
+- **Endpoints:** `POST …:mutate` under
+  `https://googleads.googleapis.com/v22/customers/<customer_id>/` —
+  `campaignBudgets`, `campaigns`, `adGroups`, `adGroupAds`. Pause re-uses
+  `campaigns:mutate` with an `update` + `updateMask=status`.
+- **API version is pinned to `v22`.** v23+ renamed `startDate` / `endDate` to
+  `startDateTime` / `endDateTime`; v22 is the newest version with the simple
+  date fields.
 - **Publish** creates: Campaign Budget → Search Campaign (**PAUSED**) → Ad Group
   → Responsive Search Ad (**PAUSED**), and returns the campaign ID.
-- **Safety:** campaign and ad are PAUSED; a past `start_date` is pushed to
-  tomorrow. A test account can't be charged regardless.
-- **Required field (v22+):** `contains_eu_political_advertising` is set to
-  *does not contain*.
+- **Safety:** campaign and ad are PAUSED; a past start date is pushed to tomorrow.
+  A test account can't be charged regardless.
+- **Required field (v22+):** `containsEuPoliticalAdvertising` is set to
+  `DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING`.
 - **Responsive Search Ads** require ≥3 headlines and ≥2 descriptions; the service
-  auto-pads from the single `ad_headline` / `ad_description` (truncating to the
-  30 / 90-char limits) so the one-headline form still produces a valid ad.
+  auto-pads from the single headline / description (truncated to 30 / 90 chars).
 - **Unique names:** a short suffix is appended to budget/campaign names so
   re-runs never collide.
 

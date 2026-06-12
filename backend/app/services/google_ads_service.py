@@ -1,8 +1,12 @@
 """
-Google Ads integration.
+Google Ads integration (REST).
 
 Publishes a local campaign as a real **Search** campaign (created PAUSED so the
 account is never charged) and pauses a campaign by its Google campaign ID.
+
+This talks to the Google Ads API over plain **HTTPS/REST** using `requests` —
+no gRPC / `google-ads` client library. Each operation is a POST to a
+`...:mutate` endpoint.
 
 Credentials are read from ``backend/google-ads.yaml`` (developer token, OAuth
 client id/secret, refresh token, login_customer_id). The target account is read
@@ -29,8 +33,10 @@ _YAML_PATH = os.path.abspath(
 )
 
 # Pin the API version explicitly. v22 is the newest version that still uses the
-# simple Campaign.start_date / end_date fields (v23+ renamed them to *_date_time).
+# simple Campaign.startDate / endDate fields (v23+ renamed them to *DateTime).
 _API_VERSION = "v22"
+_BASE_URL = f"https://googleads.googleapis.com/{_API_VERSION}"
+_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 # Responsive Search Ad field limits / minimums enforced by the API.
 _HEADLINE_MAX = 30
@@ -69,167 +75,214 @@ def _mock_pause(google_campaign_id: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Real Google Ads implementation.
+# Real Google Ads implementation (REST).
 # --------------------------------------------------------------------------- #
-def _load_client():
-    """Build a GoogleAdsClient from google-ads.yaml and return (client, customer_id)."""
-    try:
-        from google.ads.googleads.client import GoogleAdsClient
-    except ImportError as exc:
-        raise GoogleAdsError(
-            "google-ads library is not installed. Run: pip install -r requirements.txt"
-        ) from exc
+def _real_publish(campaign: Campaign) -> str:
+    customer_id, headers = _rest_context()
 
-    if not os.path.exists(_YAML_PATH):
-        raise GoogleAdsError(
-            f"google-ads.yaml not found at {_YAML_PATH}. See docs/GOOGLE_ADS_SETUP.md."
-        )
+    # Unique suffix so re-runs never collide on budget/campaign names.
+    unique = uuid.uuid4().hex[:8]
+
+    budget_resource = _create_budget(customer_id, headers, campaign, unique)
+    campaign_resource = _create_campaign(
+        customer_id, headers, campaign, budget_resource, unique
+    )
+    ad_group_resource = _create_ad_group(customer_id, headers, campaign, campaign_resource)
+    _create_responsive_search_ad(customer_id, headers, campaign, ad_group_resource)
+
+    return campaign_resource.split("/")[-1]
+
+
+def _real_pause(google_campaign_id: str) -> None:
+    customer_id, headers = _rest_context()
+    resource_name = f"customers/{customer_id}/campaigns/{google_campaign_id}"
+    _mutate(
+        "campaigns",
+        customer_id,
+        headers,
+        [{"update": {"resourceName": resource_name, "status": "PAUSED"}, "updateMask": "status"}],
+    )
+
+
+def _create_budget(customer_id, headers, campaign, unique):
+    operations = [
+        {
+            "create": {
+                "name": f"{campaign.name} Budget {unique}",
+                "amountMicros": str(int(campaign.daily_budget) * 1_000_000),
+                "deliveryMethod": "STANDARD",
+                "explicitlyShared": False,
+            }
+        }
+    ]
+    result = _mutate("campaignBudgets", customer_id, headers, operations)
+    return result["results"][0]["resourceName"]
+
+
+def _create_campaign(customer_id, headers, campaign, budget_resource, unique):
+    start, end = _campaign_dates(campaign)
+    create = {
+        "name": f"{campaign.name} [{unique}]",
+        "advertisingChannelType": "SEARCH",
+        # PAUSED so the campaign never serves and the account is never charged.
+        "status": "PAUSED",
+        # Required since v22: declare the campaign carries no EU political ads.
+        "containsEuPoliticalAdvertising": "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
+        "manualCpc": {"enhancedCpcEnabled": False},
+        "campaignBudget": budget_resource,
+        "networkSettings": {
+            "targetGoogleSearch": True,
+            "targetSearchNetwork": True,
+            "targetContentNetwork": False,
+            "targetPartnerSearchNetwork": False,
+        },
+        "startDate": start,
+    }
+    if end:
+        create["endDate"] = end
+
+    result = _mutate("campaigns", customer_id, headers, [{"create": create}])
+    return result["results"][0]["resourceName"]
+
+
+def _create_ad_group(customer_id, headers, campaign, campaign_resource):
+    operations = [
+        {
+            "create": {
+                "name": campaign.ad_group_name,
+                "campaign": campaign_resource,
+                "type": "SEARCH_STANDARD",
+                "status": "ENABLED",
+                "cpcBidMicros": "1000000",  # 1.00 in account currency; unused while paused
+            }
+        }
+    ]
+    result = _mutate("adGroups", customer_id, headers, operations)
+    return result["results"][0]["resourceName"]
+
+
+def _create_responsive_search_ad(customer_id, headers, campaign, ad_group_resource):
+    operations = [
+        {
+            "create": {
+                "adGroup": ad_group_resource,
+                # Ad also created PAUSED — belt-and-suspenders on top of the paused campaign.
+                "status": "PAUSED",
+                "ad": {
+                    "finalUrls": [_final_url(campaign)],
+                    "responsiveSearchAd": {
+                        "headlines": [{"text": t} for t in _headlines(campaign)],
+                        "descriptions": [{"text": t} for t in _descriptions(campaign)],
+                    },
+                },
+            }
+        }
+    ]
+    _mutate("adGroupAds", customer_id, headers, operations)
+
+
+# --------------------------------------------------------------------------- #
+# REST plumbing: config, OAuth, mutate, errors.
+# --------------------------------------------------------------------------- #
+def _rest_context():
+    """Return (customer_id, request_headers) ready for Google Ads REST calls."""
+    config = _load_config()
 
     customer_id = (os.getenv("GOOGLE_ADS_CUSTOMER_ID") or "").replace("-", "").strip()
     if not customer_id:
         raise GoogleAdsError("GOOGLE_ADS_CUSTOMER_ID is not set in .env")
 
-    try:
-        client = GoogleAdsClient.load_from_storage(_YAML_PATH, version=_API_VERSION)
-    except Exception as exc:  # noqa: BLE001
-        raise GoogleAdsError(f"Failed to load Google Ads credentials: {exc}") from exc
+    access_token = _fetch_access_token(config)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "developer-token": str(config["developer_token"]),
+        "login-customer-id": str(config["login_customer_id"]).replace("-", ""),
+        "Content-Type": "application/json",
+    }
+    return customer_id, headers
 
-    return client, customer_id
 
+def _load_config():
+    """Read credentials from google-ads.yaml."""
+    import yaml  # PyYAML
 
-def _real_publish(campaign: Campaign) -> str:
-    client, customer_id = _load_client()
-
-    # Unique suffix so re-runs never collide on budget/campaign names.
-    unique = uuid.uuid4().hex[:8]
-
-    try:
-        budget_resource = _create_budget(client, customer_id, campaign, unique)
-        campaign_resource, google_campaign_id = _create_campaign(
-            client, customer_id, campaign, budget_resource, unique
+    if not os.path.exists(_YAML_PATH):
+        raise GoogleAdsError(
+            f"google-ads.yaml not found at {_YAML_PATH}. See docs/GOOGLE_ADS_SETUP.md."
         )
-        ad_group_resource = _create_ad_group(
-            client, customer_id, campaign, campaign_resource
-        )
-        _create_responsive_search_ad(client, customer_id, campaign, ad_group_resource)
-    except GoogleAdsError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise GoogleAdsError(_format_google_error(exc)) from exc
+    with open(_YAML_PATH, "r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
 
-    return google_campaign_id
+    required = ("developer_token", "client_id", "client_secret", "refresh_token", "login_customer_id")
+    missing = [key for key in required if not config.get(key)]
+    if missing:
+        raise GoogleAdsError("google-ads.yaml is missing keys: " + ", ".join(missing))
+    return config
 
 
-def _create_budget(client, customer_id, campaign, unique):
-    budget_service = client.get_service("CampaignBudgetService")
-    operation = client.get_type("CampaignBudgetOperation")
-    budget = operation.create
-    budget.name = f"{campaign.name} Budget {unique}"
-    budget.amount_micros = int(campaign.daily_budget) * 1_000_000
-    budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
-    budget.explicitly_shared = False
-    response = budget_service.mutate_campaign_budgets(
-        customer_id=customer_id, operations=[operation]
-    )
-    return response.results[0].resource_name
+def _fetch_access_token(config):
+    """Exchange the refresh token for a short-lived OAuth access token."""
+    import requests
 
-
-def _create_campaign(client, customer_id, campaign, budget_resource, unique):
-    campaign_service = client.get_service("CampaignService")
-    operation = client.get_type("CampaignOperation")
-    new_campaign = operation.create
-    new_campaign.name = f"{campaign.name} [{unique}]"
-    new_campaign.advertising_channel_type = (
-        client.enums.AdvertisingChannelTypeEnum.SEARCH
-    )
-    # PAUSED so the campaign never serves and the account is never charged.
-    new_campaign.status = client.enums.CampaignStatusEnum.PAUSED
-    # Required since v22: declare the campaign carries no EU political advertising.
-    new_campaign.contains_eu_political_advertising = (
-        client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
-    )
-    new_campaign.manual_cpc.enhanced_cpc_enabled = False
-    new_campaign.campaign_budget = budget_resource
-    new_campaign.network_settings.target_google_search = True
-    new_campaign.network_settings.target_search_network = True
-    new_campaign.network_settings.target_content_network = False
-    new_campaign.network_settings.target_partner_search_network = False
-
-    start, end = _campaign_dates(campaign)
-    new_campaign.start_date = start
-    if end:
-        new_campaign.end_date = end
-
-    response = campaign_service.mutate_campaigns(
-        customer_id=customer_id, operations=[operation]
-    )
-    resource_name = response.results[0].resource_name
-    google_campaign_id = resource_name.split("/")[-1]
-    return resource_name, google_campaign_id
-
-
-def _create_ad_group(client, customer_id, campaign, campaign_resource):
-    ad_group_service = client.get_service("AdGroupService")
-    operation = client.get_type("AdGroupOperation")
-    ad_group = operation.create
-    ad_group.name = campaign.ad_group_name
-    ad_group.campaign = campaign_resource
-    ad_group.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
-    ad_group.status = client.enums.AdGroupStatusEnum.ENABLED
-    ad_group.cpc_bid_micros = 1_000_000  # 1.00 in account currency; unused while paused
-    response = ad_group_service.mutate_ad_groups(
-        customer_id=customer_id, operations=[operation]
-    )
-    return response.results[0].resource_name
-
-
-def _create_responsive_search_ad(client, customer_id, campaign, ad_group_resource):
-    ad_service = client.get_service("AdGroupAdService")
-    operation = client.get_type("AdGroupAdOperation")
-    ad_group_ad = operation.create
-    ad_group_ad.ad_group = ad_group_resource
-    # Ad also created PAUSED — belt-and-suspenders on top of the paused campaign.
-    ad_group_ad.status = client.enums.AdGroupAdStatusEnum.PAUSED
-    ad_group_ad.ad.final_urls.append(_final_url(campaign))
-
-    rsa = ad_group_ad.ad.responsive_search_ad
-    for text in _headlines(campaign):
-        asset = client.get_type("AdTextAsset")
-        asset.text = text
-        rsa.headlines.append(asset)
-    for text in _descriptions(campaign):
-        asset = client.get_type("AdTextAsset")
-        asset.text = text
-        rsa.descriptions.append(asset)
-
-    ad_service.mutate_ad_group_ads(customer_id=customer_id, operations=[operation])
-
-
-def _real_pause(google_campaign_id: str) -> None:
-    from google.api_core import protobuf_helpers
-
-    client, customer_id = _load_client()
-    campaign_service = client.get_service("CampaignService")
-    operation = client.get_type("CampaignOperation")
-    update = operation.update
-    update.resource_name = campaign_service.campaign_path(
-        customer_id, google_campaign_id
-    )
-    update.status = client.enums.CampaignStatusEnum.PAUSED
-    client.copy_from(
-        operation.update_mask,
-        protobuf_helpers.field_mask(None, update._pb),
-    )
     try:
-        campaign_service.mutate_campaigns(
-            customer_id=customer_id, operations=[operation]
+        response = requests.post(
+            _TOKEN_URL,
+            data={
+                "client_id": config["client_id"],
+                "client_secret": config["client_secret"],
+                "refresh_token": config["refresh_token"],
+                "grant_type": "refresh_token",
+            },
+            timeout=30,
         )
-    except Exception as exc:  # noqa: BLE001
-        raise GoogleAdsError(_format_google_error(exc)) from exc
+    except requests.RequestException as exc:
+        raise GoogleAdsError(f"Network error during OAuth token request: {exc}") from exc
+
+    if not response.ok:
+        raise GoogleAdsError(
+            f"OAuth token request failed (HTTP {response.status_code}): {response.text[:300]}"
+        )
+    token = response.json().get("access_token")
+    if not token:
+        raise GoogleAdsError("OAuth token response did not include an access_token")
+    return token
+
+
+def _mutate(resource, customer_id, headers, operations):
+    """POST a list of operations to a Google Ads `...:mutate` REST endpoint."""
+    import requests
+
+    url = f"{_BASE_URL}/customers/{customer_id}/{resource}:mutate"
+    try:
+        response = requests.post(url, headers=headers, json={"operations": operations}, timeout=60)
+    except requests.RequestException as exc:
+        raise GoogleAdsError(f"Network error calling Google Ads: {exc}") from exc
+
+    if not response.ok:
+        raise GoogleAdsError(_format_rest_error(response))
+    return response.json()
+
+
+def _format_rest_error(response):
+    """Turn a Google Ads REST error body into a short, readable message."""
+    try:
+        error = response.json().get("error", {})
+        messages = []
+        for detail in error.get("details", []):
+            for item in detail.get("errors", []):
+                if item.get("message"):
+                    messages.append(item["message"])
+        if messages:
+            return "Google Ads API error: " + "; ".join(messages)
+        if error.get("message"):
+            return "Google Ads API error: " + error["message"]
+    except ValueError:
+        pass
+    return f"Google Ads API error: HTTP {response.status_code} {response.text[:300]}"
 
 
 # --------------------------------------------------------------------------- #
-# Helpers.
+# Helpers (no Google dependency).
 # --------------------------------------------------------------------------- #
 def _campaign_dates(campaign):
     """Return (start, end) as YYYYMMDD strings; push past start dates to tomorrow."""
@@ -296,13 +349,3 @@ def _descriptions(campaign):
             descriptions.append(filler)
         i += 1
     return descriptions[:4]
-
-
-def _format_google_error(exc):
-    """Turn a GoogleAdsException into a short, readable message."""
-    failure = getattr(exc, "failure", None)
-    if failure is not None:
-        messages = [error.message for error in failure.errors if error.message]
-        if messages:
-            return "Google Ads API error: " + "; ".join(messages)
-    return f"Google Ads API error: {exc}"

@@ -41,7 +41,7 @@ A full-stack web application to create, manage, and publish digital marketing ca
 - **Frontend** — React 18, Vite 4, Axios
 - **Backend** — Python 3, Flask 3, Flask-CORS
 - **Database** — PostgreSQL, SQLAlchemy ORM, Flask-Migrate (Alembic)
-- **Google Ads** — Real Google Ads API via the official `google-ads` library (API pinned to `v22`); optional offline mock
+- **Google Ads** — Real Google Ads **REST API** via `requests` (HTTPS, no gRPC; API `v22`); optional offline mock
 
 ### Architecture
 
@@ -53,9 +53,9 @@ Flask REST API (port 5000)
     │  SQLAlchemy ORM
     ▼
 PostgreSQL (campaigns table)
-    │  google_ads_service.py
+    │  google_ads_service.py — HTTPS/REST via requests
     ▼
-Google Ads API (v22) — creates a real PAUSED Search campaign
+Google Ads REST API (v22) — creates a real PAUSED Search campaign
    (or an offline mock when GOOGLE_ADS_USE_MOCK=true)
 ```
 
@@ -81,7 +81,8 @@ Google Ads API (v22) — creates a real PAUSED Search campaign
 - **Google Ads integration** — `backend/app/services/google_ads_service.py`
   - `publish_search_campaign()` creates Budget → Search Campaign (**PAUSED**) → Ad Group → Responsive Search Ad in a real Google Ads test account, and returns the real campaign ID
   - `pause_campaign()` sets the Google Ads campaign status to PAUSED
-  - API pinned to `v22` (newest version with the simple `start_date`/`end_date` fields); sets `contains_eu_political_advertising` (required v22+); auto-pads to the 3-headline / 2-description minimum Responsive Search Ads require
+  - Calls the Google Ads **REST** `…:mutate` endpoints directly with `requests` (no gRPC / `google-ads` library); fetches an OAuth access token from the refresh token per request
+  - API pinned to `v22` (newest with the simple `start_date`/`end_date` fields); sets `contains_eu_political_advertising` (required v22+); auto-pads to the 3-headline / 2-description RSA minimum
   - Set `GOOGLE_ADS_USE_MOCK=true` for an offline mock that returns a fake ID with no API calls — see [docs/MOCK_MODE.md](backend/docs/MOCK_MODE.md)
   - Full credential setup: [docs/GOOGLE_ADS_SETUP.md](backend/docs/GOOGLE_ADS_SETUP.md)
 
