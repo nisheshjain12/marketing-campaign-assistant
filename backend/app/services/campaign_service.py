@@ -86,7 +86,7 @@ def publish_campaign(campaign_id: str) -> Campaign:
     """Publish a local DRAFT campaign to Google Ads."""
     campaign = get_campaign(campaign_id)
 
-    if campaign.status == "PUBLISHED":
+    if campaign.google_campaign_id:
         raise ValidationError(
             "Campaign already published",
             details=["This campaign has already been sent to Google Ads"],
@@ -101,7 +101,8 @@ def publish_campaign(campaign_id: str) -> Campaign:
     google_campaign_id = google_ads_service.publish_search_campaign(campaign)
 
     campaign.google_campaign_id = google_campaign_id
-    campaign.status = "PUBLISHED"
+    # Status mirrors Google Ads: the campaign is created PAUSED (so it is never charged).
+    campaign.status = "PAUSED"
     db.session.commit()
     return campaign
 
@@ -130,24 +131,24 @@ def pause_campaign(campaign_id: str) -> Campaign:
 
 
 def resume_campaign(campaign_id: str) -> Campaign:
-    """Resume (enable) a paused campaign in Google Ads and update local status."""
+    """Enable (resume) a paused campaign in Google Ads and update local status."""
     campaign = get_campaign(campaign_id)
 
     if not campaign.google_campaign_id:
         raise ValidationError(
             "Campaign is not published",
-            details=["Publish the campaign before trying to resume it"],
+            details=["Publish the campaign before trying to enable it"],
         )
 
     if campaign.status != "PAUSED":
         raise ValidationError(
             "Campaign is not paused",
-            details=["Only paused campaigns can be resumed"],
+            details=["Only paused campaigns can be enabled"],
         )
 
     google_ads_service.resume_campaign(campaign.google_campaign_id)
 
-    campaign.status = "PUBLISHED"
+    campaign.status = "ENABLED"
     db.session.commit()
     return campaign
 

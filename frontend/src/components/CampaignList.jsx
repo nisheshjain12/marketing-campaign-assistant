@@ -2,6 +2,7 @@ import { publishCampaign, pauseCampaign, resumeCampaign } from '../api/campaigns
 
 const STATUS_COLORS = {
   DRAFT: '#6b7280',
+  ENABLED: '#16a34a',
   PUBLISHED: '#16a34a',
   PAUSED: '#ca8a04',
   FAILED: '#dc2626',
@@ -63,9 +64,8 @@ export default function CampaignList({ campaigns, loading, onRefresh }) {
     <div className="card">
       <h2>Campaigns</h2>
       <p className="muted" style={{ marginTop: '-0.5rem', fontSize: '0.85rem' }}>
-        ℹ️ Campaigns are published to Google Ads as <strong>Paused</strong> so your account is never
-        charged. A <strong>PUBLISHED</strong> status here means it exists in Google Ads — it will show
-        as <em>Paused</em> there until you actively run it.
+        ℹ️ Status mirrors Google Ads. A newly published campaign starts <strong>Paused</strong> (so your
+        account is never charged) — click <strong>Enable</strong> to serve it, <strong>Pause</strong> to stop it.
       </p>
       <div className="table-wrap">
         <table>
@@ -95,14 +95,14 @@ export default function CampaignList({ campaigns, loading, onRefresh }) {
                       Publish
                     </button>
                   )}
-                  {c.status === 'PUBLISHED' && (
+                  {c.status === 'ENABLED' && (
                     <button className="btn btn-warn" onClick={() => handlePause(c.id)}>
                       Pause
                     </button>
                   )}
                   {c.status === 'PAUSED' && (
                     <button className="btn btn-warning" onClick={() => handleResume(c.id)}>
-                      Resume
+                      Enable
                     </button>
                   )}
                 </td>

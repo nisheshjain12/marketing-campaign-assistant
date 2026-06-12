@@ -21,12 +21,12 @@ A full-stack web application to create, manage, and publish digital marketing ca
 
 - **Publish to Google Ads**
   - Click the green **Publish** button next to any draft campaign
-  - The app sends the campaign to Google Ads and the status badge turns green: **PUBLISHED**
-  - A Google Campaign ID appears, confirming it's in Google Ads — created **Paused** there (so you're never charged), even though our app status reads **PUBLISHED**
+  - The campaign is created in Google Ads as **Paused** (so your account is never charged), and the status badge shows **PAUSED** — mirroring its real Google Ads status
+  - A Google Campaign ID appears, confirming it's in Google Ads
 
-- **Pause or resume a campaign**
-  - Click the amber **Pause** button next to any published campaign to stop it
-  - Status changes to **PAUSED**; click **Resume** to re-enable the *same* campaign (back to **PUBLISHED**) — no duplicate is created
+- **Enable or pause a campaign**
+  - A paused campaign shows an **Enable** button — click it to serve the *same* campaign (status → **ENABLED**, it goes live in Google Ads)
+  - An enabled campaign shows a **Pause** button — click it to stop serving (status → **PAUSED**). Statuses always mirror Google Ads; no duplicates are created
 
 - **Safe to publish**
   - The app publishes to a **real Google Ads test account** — campaigns are always created **PAUSED**, so a test account is never charged
@@ -69,15 +69,15 @@ Google Ads REST API (v22) — creates a real PAUSED Search campaign
   | `GET` | `/api/health` | Health check |
   | `GET` | `/api/campaigns` | List all campaigns (newest first) |
   | `POST` | `/api/campaigns` | Create campaign (status: `DRAFT`) |
-  | `POST` | `/api/campaigns/<id>/publish` | Publish to Google Ads (status: `PUBLISHED`) |
-  | `POST` | `/api/campaigns/<id>/pause` | Pause campaign (status: `PAUSED`) |
-  | `POST` | `/api/campaigns/<id>/resume` | Resume a paused campaign (status: `PUBLISHED`) |
+  | `POST` | `/api/campaigns/<id>/publish` | Publish to Google Ads — created Paused (status: `PAUSED`) |
+  | `POST` | `/api/campaigns/<id>/pause` | Pause an enabled campaign (status: `PAUSED`) |
+  | `POST` | `/api/campaigns/<id>/resume` | Enable a paused campaign (status: `ENABLED`) |
 
 - **Service layer** — `backend/app/services/campaign_service.py` — all business logic and validation
   - Required fields: `name`, `objective`, `daily_budget`, `start_date`, `ad_group_name`, `ad_headline`, `ad_description`
   - `daily_budget` must be a positive integer
   - `end_date` must be on or after `start_date` if provided
-  - Status transitions enforced: cannot publish twice, cannot pause a draft
+  - Status transitions enforced: cannot publish twice, cannot pause a draft, cannot enable a non-paused campaign
 
 - **Google Ads integration** — `backend/app/services/google_ads_service.py`
   - `publish_search_campaign()` creates Budget → Search Campaign (**PAUSED**) → Ad Group → Responsive Search Ad in a real Google Ads test account, and returns the real campaign ID
@@ -98,7 +98,7 @@ Google Ads REST API (v22) — creates a real PAUSED Search campaign
   | `daily_budget` | Integer | USD per day |
   | `start_date` | Date | Required |
   | `end_date` | Date | Optional |
-  | `status` | String | `DRAFT` → `PUBLISHED` → `PAUSED` |
+  | `status` | String | `DRAFT` → `PAUSED` ⇄ `ENABLED` (mirrors Google Ads) |
   | `google_campaign_id` | String | Null until published |
   | `ad_group_name` | String | Ad group name |
   | `ad_headline` | String | Ad title text |
@@ -229,13 +229,13 @@ npm run dev
 - **Test validation** — submit the form with an empty name or budget of `0`
   - A red error message should appear; no campaign should be added to the list
 - **Publish** — click the green **Publish** button on a DRAFT row
-  - Status changes to **PUBLISHED** (green badge)
-  - A real Google Campaign ID appears in the table; the campaign is created **PAUSED** in your Google Ads test account (verify it in the Google Ads UI)
+  - Status shows **PAUSED** (amber badge) — the campaign is created **Paused** in Google Ads (mirroring its real status), so your account is never charged
+  - A real Google Campaign ID appears in the table (verify it in the Google Ads UI)
   - *(With `GOOGLE_ADS_USE_MOCK=true`, a fake 10-digit ID appears instead and nothing is sent to Google)*
-- **Pause** — click the amber **Pause** button on a PUBLISHED row
-  - Status changes to **PAUSED** (amber badge)
-- **Resume** — click the **Resume** button on a PAUSED row
-  - Status changes back to **PUBLISHED**; the same Google campaign is re-enabled in Google Ads (no duplicate)
+- **Enable** — click the green **Enable** button on a PAUSED row
+  - Status changes to **ENABLED** (green badge); the same Google campaign is set to Enabled in Google Ads (no duplicate)
+- **Pause** — click the amber **Pause** button on an ENABLED row
+  - Status changes back to **PAUSED** (amber badge)
 - **Persistence check** — stop the backend (Ctrl+C), restart it (`python run.py`), reload the browser
   - All campaigns should still be there (data lives in PostgreSQL)
 

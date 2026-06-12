@@ -97,40 +97,37 @@ def main():
     if items:
         check("Newest first (our campaign near top)", items[0].get("id") == campaign_id)
 
-    # 5. Publish
+    # 5. Publish (campaign is created PAUSED in Google Ads, mirroring its real status)
     print("\n5. Publish (POST /api/campaigns/<id>/publish)")
     r = client.post(f"/api/campaigns/{campaign_id}/publish")
     check("Publish returns 200", r.status_code == 200)
     pub = r.get_json().get("data", {})
     google_id = pub.get("google_campaign_id")
-    check("Status is PUBLISHED", pub.get("status") == "PUBLISHED")
+    check("Status is PAUSED after publish", pub.get("status") == "PAUSED")
     check("google_campaign_id is set", google_id and google_id.isdigit())
 
     r = client.post(f"/api/campaigns/{campaign_id}/publish")
     check("Double publish returns 400", r.status_code == 400)
 
-    # 6. Pause
-    print("\n6. Pause (POST /api/campaigns/<id>/pause)")
+    # 6. Enable (POST /api/campaigns/<id>/resume)
+    print("\n6. Enable (POST /api/campaigns/<id>/resume)")
+    r = client.post(f"/api/campaigns/{campaign_id}/resume")
+    check("Enable returns 200", r.status_code == 200)
+    enabled = r.get_json().get("data", {})
+    check("Status is ENABLED", enabled.get("status") == "ENABLED")
+    check("Enable keeps same google_campaign_id", enabled.get("google_campaign_id") == google_id)
+
+    r = client.post(f"/api/campaigns/{campaign_id}/resume")
+    check("Enable of non-paused returns 400", r.status_code == 400)
+
+    # 6b. Pause (POST /api/campaigns/<id>/pause)
+    print("\n6b. Pause (POST /api/campaigns/<id>/pause)")
     r = client.post(f"/api/campaigns/{campaign_id}/pause")
     check("Pause returns 200", r.status_code == 200)
     check("Status is PAUSED", r.get_json().get("data", {}).get("status") == "PAUSED")
 
     r = client.post(f"/api/campaigns/{campaign_id}/pause")
     check("Double pause returns 400", r.status_code == 400)
-
-    # 6b. Resume
-    print("\n6b. Resume (POST /api/campaigns/<id>/resume)")
-    r = client.post(f"/api/campaigns/{campaign_id}/resume")
-    check("Resume returns 200", r.status_code == 200)
-    resumed = r.get_json().get("data", {})
-    check("Resume sets status back to PUBLISHED", resumed.get("status") == "PUBLISHED")
-    check("Resume keeps same google_campaign_id", resumed.get("google_campaign_id") == google_id)
-
-    r = client.post(f"/api/campaigns/{campaign_id}/resume")
-    check("Resume of non-paused returns 400", r.status_code == 400)
-
-    # restore PAUSED so the persistence checks below still hold
-    client.post(f"/api/campaigns/{campaign_id}/pause")
 
     # 7. Not found
     print("\n7. Not found")
